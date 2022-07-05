@@ -23,6 +23,8 @@ Usage - formats:
                                          yolov5s.tflite             # TensorFlow Lite
                                          yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
 """
+import numpy as np
+import pandas as pd
 from tkinter import *
 from numpy.polynomial import Polynomial
 from scipy.optimize import curve_fit
@@ -52,10 +54,15 @@ if str(ROOT) not in sys.path:
 ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 centers = []
+time = []
+timeCount = 0
+
 frame_height = 480
+frame_width = 480
 
-# print(popt)
-
+left_part = True
+saving_directory = ''
+final_video_dir = ''
 
 area_points = []
 tmp_area = 0
@@ -115,7 +122,7 @@ def run(
         weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(640, 640),  # inference size (height, width)
+        imgsz=(frame_height, frame_width),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -128,7 +135,7 @@ def run(
         classes=None,  # filter by class: --class 0, or --class 0 2 3
         agnostic_nms=False,  # class-agnostic NMS
         augment=False,  # augmented inference
-        visualize=False,  # visualize features
+        visualize=True,  # visualize features
         update=False,  # update all models
         project=ROOT / 'runs/detect',  # save results to project/name
         name='exp',  # save results to project/name
@@ -138,7 +145,18 @@ def run(
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
         dnn=False,  # use OpenCV DNN for ONNX inference
+        left=False
 ):
+
+    global left_part
+    left_part = left
+
+    global frame_height
+    global final_video_dir
+    global saving_directory
+
+    global timeCount
+
     source = str(source)
     save_img = not nosave and not source.endswith('.txt')  # save inference images
     is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
@@ -150,6 +168,8 @@ def run(
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+
+    saving_directory = save_dir
 
     # Load model
     device = select_device(device)
@@ -173,6 +193,7 @@ def run(
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
     for path, im, im0s, vid_cap, s in dataset:
+
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
@@ -241,7 +262,8 @@ def run(
                         area = abs(x1 - x2) * abs(y1 - y2)
 
                         X = math.floor((x1 + x2) / 2)
-                        Y = math.floor((y1 + y2) / 2)
+                        YY = math.floor((y1 + y2) / 2)
+                        Y = math.floor(frame_height - YY)
                         # Z = assumptionZ(area)
                         Z = assumptionZNew(area)
                         # Z = assumptionOfDepth(area)
@@ -249,21 +271,16 @@ def run(
                         x.append(X)
                         y.append(Y)
                         z.append(Z)
+                        time.append(timeCount)
+
+                        if cv2.waitKey(1) & 0xFF == ord('q'):
+                            break   
 
                         c = int(cls)  # integer class
                         label = None if hide_labels else (
                             names[c] if hide_conf else f'{X, Y, Z}')
                         # names[c] if hide_conf else f'{names[c]} {X, Y, Z} {conf:.2f}')
                         annotator.box_label(xyxy, label, color=colors(c, True))
-
-                        # x1 = int(xyxy[0].item())
-                        # y1 = int(xyxy[1].item())
-                        # x2 = int(xyxy[2].item())
-                        # y2 = int(xyxy[3].item())
-
-                        # area = abs(x1 - x2) * abs(y1 - y2)
-
-                        # print("Area now            =============== ", area)
 
                         area_points.append(int(area))
 
@@ -288,7 +305,9 @@ def run(
             im0 = annotator.result()
             if view_img:
                 cv2.imshow(str(p), im0)
-                cv2.waitKey(1)  # 1 millisecond
+                # cv2.waitKey(1)  # 1 millisecond
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
 
             # Save results (image with detections)
             if save_img:
@@ -306,11 +325,14 @@ def run(
                         else:  # stream
                             fps, w, h = 30, im0.shape[1], im0.shape[0]
                         save_path = str(Path(save_path).with_suffix('.mp4'))  # force *.mp4 suffix on results videos
+                        final_video_dir = save_path
                         vid_writer[i] = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer[i].write(im0)
 
         # Print time (inference-only)
         LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+
+        timeCount += 1
 
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
@@ -320,6 +342,8 @@ def run(
         LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
     if update:
         strip_optimizer(weights)  # update model (to fix SourceChangeWarning)
+
+    print(imgsz)
 
 
 def parse_opt():
@@ -350,6 +374,7 @@ def parse_opt():
     parser.add_argument('--hide-conf', default=False, action='store_true', help='hide confidences')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
+    parser.add_argument('--left', default=False, action='store_true', help='use OpenCV DNN for ONNX inference')
     opt = parser.parse_args()
     opt.imgsz *= 2 if len(opt.imgsz) == 1 else 1  # expand
     # print_args(vars(opt))
@@ -366,12 +391,18 @@ if __name__ == "__main__":
 
     print("In detect")
     opt = parse_opt()
+
+    try:
+        vcap = cv2.VideoCapture(opt.source)
+        frame_width = vcap. get(cv2. CAP_PROP_FRAME_WIDTH)
+        frame_height = vcap. get(cv2. CAP_PROP_FRAME_HEIGHT)
+    except:
+        frame_height, frame_width, c = cv2.imread(opt.source).shape
+
     tmp_area = 0
-    # print('asd')
+
     main(opt)
-    # for i in centers:
-    #     i[1] = frame_height - i[1]
-    # print(centers)
+
     prev = -1
     results = []
     area_points.sort()
@@ -380,12 +411,61 @@ if __name__ == "__main__":
             results.append(area_points[i])
             prev = area_points[i]
 
-    # print(centers)
+    nameOfCoordinates = '\\centers.txt'
 
-    f = open("centers.txt", 'w')
+    if left_part:
+        nameOfCoordinates = '\\left_centers.txt'
+    else:
+        nameOfCoordinates = '\\right_centers.txt'
+
+    # cap = cv2.VideoCapture(str(saving_directory)+"//")
+
+    f = open(str(saving_directory) + nameOfCoordinates, 'w')
+
     for i in range(len(x)):
         f.writelines(str(x[i]) + ' ' + str(y[i]) + ' ' + str(z[i]) + '\n')
 
-    # os.system("python graphing2d.py")
+    new_final_video_dir = final_video_dir.replace(".mp4", "_traced.mp4")
 
-    # os.system("python graphing3d.py")
+    cap = cv2.VideoCapture(final_video_dir)
+
+    # output = cv2.VideoWriter(new_final_video_dir, cv2.VideoWriter_fourcc(*'MPEG'),
+    #                          cv2.CAP_PROP_FPS, (int(frame_height), int(frame_width)))
+    output = cv2.VideoWriter(new_final_video_dir, -1, cv2.CAP_PROP_FPS, (int(cap.get(3)), int(cap.get(4))))
+
+    x_data = np.array(x)
+    y_data = np.array(y)
+
+    def model_f(x, a, b, c):
+        return a * x**2 + b * x + c
+
+    popt, pcov = curve_fit(model_f, x_data, y_data, p0=[3, 2, -16])
+
+    a_opt, b_opt, c_opt = popt
+    x_model = np.linspace(min(x_data), max(x_data), 100)
+    y_model = model_f(x_model, a_opt, b_opt, c_opt)
+
+    a_opt, b_opt, c_opt = popt
+    x_model = np.linspace(min(x_data), max(x_data) + 300, 300)
+    y_model = model_f(x_model, a_opt, b_opt, c_opt)
+
+    while(True):
+        ret, frame = cap.read()
+        if(ret):
+            for i in range(len(x_model)):
+                # adding filled rectangle on each frame
+                cv2.circle(frame, (int(x_model[i]), int(frame_height - y_model[i])), 2,
+                           (0, 255, 0), -1)
+
+            # writing the new frame in output
+            output.write(frame)
+            cv2.imshow("output", frame)
+            if cv2.waitKey(100) & 0xFF == ord('q'):
+                break
+
+        else:
+            break
+
+    cv2.destroyAllWindows()
+    output.release()
+    cap.release()
