@@ -101,20 +101,25 @@ class App(customtkinter.CTk):
                                                 command=self.see_saved_works_btn_clicked)
         self.button_2.grid(row=3, column=0, pady=10, padx=20)
 
-        self.button_33 = customtkinter.CTkButton(master=self.frame_left,
-                                                 text="Run Live",
-                                                 command=self.run_new_yolo_live)
-        self.button_33.grid(row=4, column=0, pady=10, padx=20)
+        # self.button_33 = customtkinter.CTkButton(master=self.frame_left,
+        #                                          text="Run Live",
+        #                                          command=self.run_new_yolo_live)
+        # self.button_33.grid(row=4, column=0, pady=10, padx=20)
 
         self.button_3322 = customtkinter.CTkButton(master=self.frame_left,
                                                    text="View 3d",
                                                    command=self.view_3d)
         self.button_3322.grid(row=4, column=0, pady=10, padx=20)
 
+        self.button_99 = customtkinter.CTkButton(master=self.frame_left,
+                                                 text="Run Live Stereo",
+                                                 command=self.run_live_stereo)
+        self.button_99.grid(row=5, column=0, pady=10, padx=20)
+
         self.button_3 = customtkinter.CTkButton(master=self.frame_left,
                                                 text="Exit",
                                                 command=self.on_closing)
-        self.button_3.grid(row=5, column=0, pady=10, padx=20)
+        self.button_3.grid(row=6, column=0, pady=10, padx=20)
 
         self.label_mode = customtkinter.CTkLabel(master=self.frame_left, text="Appearance Mode:")
         self.label_mode.grid(row=9, column=0, pady=0, padx=20, sticky="w")
@@ -208,6 +213,11 @@ class App(customtkinter.CTk):
         command_for_live = "python detect_triangulation.py --source 0 --weights yolov5x.pt --classes 32"
         ret = subprocess.run(command_for_live, capture_output=True, shell=True)
 
+    def run_live_stereo(self):
+        self.destroyStuff()
+        command_for_live = "python depth_measurement.py"
+        ret = subprocess.run(command_for_live, capture_output=True, shell=True)
+
     def run_yolo(self):
         self.destroyStuff()
         global fileName
@@ -229,6 +239,10 @@ class App(customtkinter.CTk):
     def destroyStuff(self):
         try:
             self.label_new_yolo.destroy()
+        except:
+            pass
+        try:
+            self.label_yolo_running.destroy()
         except:
             pass
         try:
@@ -260,27 +274,11 @@ class App(customtkinter.CTk):
         except:
             pass
         try:
-            self.label_new_video1111.destroy()
-        except:
-            pass
-        try:
-            self.button_select_video22.destroy()
-        except:
-            pass
-        try:
             self.button_select_video222.destroy()
         except:
             pass
         try:
-            self.label_selected_video2.destroy()
-        except:
-            pass
-        try:
             self.label_selected_video222.destroy()
-        except:
-            pass
-        try:
-            self.button_42.destroy()
         except:
             pass
         try:
