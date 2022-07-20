@@ -9,6 +9,7 @@ from vectors import Vector
 x = [1, 20, 30, 40, 50, 137, 208]
 y = [1, 20, 30, 40, 50, 137, 208]
 z = [1, 20, 30, 40, 50, 137, 208]
+idx = 0
 
 class SolarSystem:
 
@@ -38,12 +39,10 @@ class SolarSystem:
 
     def update_all(self):
         self.bodies.sort(key=lambda item: item.position[0])
-        i = 0
         for body in self.bodies:
-            body.move(i)
+            body.move()
             body.draw()
 
-            i = (i + 1) % len(x)
 
         # self.bodies.sort(key=lambda item: item.position[0])
         # for body in self.bodies:
@@ -72,9 +71,7 @@ class SolarSystem:
 class SolarSystemBody:
     min_display_size = 10
     display_log_base = 1.3
-    global x
-    global y
-    global z
+    
 
     def __init__(
         self,
@@ -96,12 +93,17 @@ class SolarSystemBody:
 
         self.solar_system.add_body(self)
 
-    def move(self, idx):
+    def move(self):
+        global x
+        global y
+        global z
+        global idx
         self.position = (
             x[idx],
             y[idx],
             z[idx],
         )
+        idx=(idx+1)%len(x)
 
     def draw(self):
         self.solar_system.ax.plot(
